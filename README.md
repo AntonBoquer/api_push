@@ -73,29 +73,104 @@ Authorization: Bearer your_bearer_token_here
 
 ## Example Usage
 
-### Push Generic Data
+### Push Detection Results Data
 
+#### **Windows Command Prompt:**
+```cmd
+curl -X POST "https://your-api.vercel.app/api/v1/push" -H "Authorization: Bearer YOUR_TOKEN_HERE" -H "Content-Type: application/json" -d "{\"data\": {\"detection_results\": [{\"image\": \"bus_interior.jpg\", \"class_id\": 1, \"class_name\": \"unoccupied\", \"confidence\": 0.9101, \"x_min\": 2718.45, \"y_min\": 1587.07, \"x_max\": 3177.09, \"y_max\": 2442.6}, {\"image\": \"bus_interior.jpg\", \"class_id\": 0, \"class_name\": \"occupied\", \"confidence\": 0.9013, \"x_min\": 2178.01, \"y_min\": 1583.09, \"x_max\": 2669.04, \"y_max\": 2438.98}], \"summary\": {\"total_detections\": 41, \"occupied_seats\": 18, \"unoccupied_seats\": 23, \"occupancy_percentage\": 43.9}}}"
+```
+
+#### **PowerShell/Linux/Mac:**
 ```bash
 curl -X POST "https://your-api.vercel.app/api/v1/push" \
-  -H "Authorization: Bearer your_bearer_token" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
   -H "Content-Type: application/json" \
   -d '{
     "data": {
-      "message": "Hello from bus system",
-      "timestamp": "2024-01-15T10:30:00Z"
-    },
-    "metadata": {
-      "source": "mobile_app",
-      "version": "1.0"
+      "detection_results": [
+        {
+          "image": "bus_interior.jpg",
+          "class_id": 1,
+          "class_name": "unoccupied", 
+          "confidence": 0.9101,
+          "x_min": 2718.45,
+          "y_min": 1587.07,
+          "x_max": 3177.09,
+          "y_max": 2442.6
+        },
+        {
+          "image": "bus_interior.jpg",
+          "class_id": 0,
+          "class_name": "occupied",
+          "confidence": 0.9013,
+          "x_min": 2178.01,
+          "y_min": 1583.09,
+          "x_max": 2669.04,
+          "y_max": 2438.98
+        }
+      ],
+      "summary": {
+        "total_detections": 41,
+        "occupied_seats": 18,
+        "unoccupied_seats": 23,
+        "occupancy_percentage": 43.9
+      }
     }
   }'
+```
+
+#### **Python Example:**
+```python
+import requests
+import json
+
+# Configuration
+API_URL = "https://your-api.vercel.app/api/v1/push"
+BEARER_TOKEN = "YOUR_TOKEN_HERE"
+
+# Load your detection results
+with open('detection_results3.json', 'r') as f:
+    detection_data = json.load(f)
+
+# Analyze the data
+occupied = sum(1 for item in detection_data if item['class_name'] == 'occupied')
+unoccupied = sum(1 for item in detection_data if item['class_name'] == 'unoccupied')
+
+# Prepare the payload
+payload = {
+    "data": {
+        "detection_results": detection_data,
+        "summary": {
+            "total_detections": len(detection_data),
+            "occupied_seats": occupied,
+            "unoccupied_seats": unoccupied,
+            "total_seats": occupied + unoccupied,
+            "occupancy_percentage": round(occupied/(occupied+unoccupied)*100, 2)
+        }
+    }
+}
+
+# Send the request
+headers = {
+    "Authorization": f"Bearer {BEARER_TOKEN}",
+    "Content-Type": "application/json"
+}
+
+response = requests.post(API_URL, json=payload, headers=headers)
+
+if response.status_code == 200:
+    result = response.json()
+    print(f"✅ Success: {result['message']}")
+    print(f"📊 Occupancy: {occupied}/{occupied+unoccupied} seats occupied")
+else:
+    print(f"❌ Error: {response.status_code} - {response.text}")
 ```
 
 ### Update Bus Occupancy
 
 ```bash
 curl -X POST "https://your-api.vercel.app/api/v1/bus-occupancy" \
-  -H "Authorization: Bearer your_bearer_token" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
   -H "Content-Type: application/json" \
   -d '{
     "bus_id": "BUS_001",
