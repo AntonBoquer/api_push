@@ -13,9 +13,6 @@
     }
   ],
   "env": {
-    "SUPABASE_URL": "@supabase-url",
-    "SUPABASE_KEY": "@supabase-key", 
-    "BEARER_TOKEN": "@bearer-token",
     "ENVIRONMENT": "production"
   }
 }
