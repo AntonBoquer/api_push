@@ -1,4 +1,4 @@
-# Vercel entry point
+# Vercel entry point for FastAPI
 import sys
 import os
 from pathlib import Path
@@ -18,5 +18,8 @@ except ImportError as e:
     spec.loader.exec_module(main_module)
     app = main_module.app
 
-# This is the entry point for Vercel
-handler = app
+# Vercel expects this specific format for FastAPI
+from mangum import Mangum
+
+# Create the handler using Mangum adapter
+handler = Mangum(app)
