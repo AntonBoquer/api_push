@@ -77,7 +77,7 @@ Authorization: Bearer your_bearer_token_here
 
 #### **Windows Command Prompt:**
 ```cmd
-curl -X POST "https://api-push-2oek.vercel.app/api/v1/push" -H "Authorization: Bearer YOUR_TOKEN_HERE" -H "Content-Type: application/json" -d "{\"data\": {\"detection_results\": [{\"image\": \"bus_interior.jpg\", \"class_id\": 1, \"class_name\": \"unoccupied\", \"confidence\": 0.9101, \"x_min\": 2718.45, \"y_min\": 1587.07, \"x_max\": 3177.09, \"y_max\": 2442.6}, {\"image\": \"bus_interior.jpg\", \"class_id\": 0, \"class_name\": \"occupied\", \"confidence\": 0.9013, \"x_min\": 2178.01, \"y_min\": 1583.09, \"x_max\": 2669.04, \"y_max\": 2438.98}], \"summary\": {\"total_detections\": 41, \"occupied_seats\": 18, \"unoccupied_seats\": 23, \"occupancy_percentage\": 43.9}}}"
+curl -X POST "https://your-api.vercel.app/api/v1/push" -H "Authorization: Bearer YOUR_TOKEN_HERE" -H "Content-Type: application/json" -d "{\"data\": {\"detection_results\": [{\"image\": \"bus_interior.jpg\", \"class_id\": 1, \"class_name\": \"unoccupied\", \"confidence\": 0.9101, \"x_min\": 2718.45, \"y_min\": 1587.07, \"x_max\": 3177.09, \"y_max\": 2442.6}, {\"image\": \"bus_interior.jpg\", \"class_id\": 0, \"class_name\": \"occupied\", \"confidence\": 0.9013, \"x_min\": 2178.01, \"y_min\": 1583.09, \"x_max\": 2669.04, \"y_max\": 2438.98}], \"summary\": {\"total_detections\": 41, \"occupied_seats\": 18, \"unoccupied_seats\": 23, \"occupancy_percentage\": 43.9}}}"
 ```
 
 #### **PowerShell/Linux/Mac:**
@@ -297,5 +297,3 @@ All requests and errors are logged with appropriate levels:
 ## License
 
 This project is licensed under the MIT License.
-
-
