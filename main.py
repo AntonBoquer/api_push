@@ -1,19 +1,28 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 from datetime import datetime
 from typing import Any
+import traceback
 
 # Local imports
-from config import settings
-from auth import verify_bearer_token
-from models import APIResponse, PushPayload, BusOccupancyData, HealthCheck
-from database import supabase_client
+try:
+    from config import settings
+    from auth import verify_bearer_token
+    from models import APIResponse, PushPayload, BusOccupancyData, HealthCheck
+    from database import supabase_client
+except ImportError as e:
+    print(f"Import error in main.py: {e}")
+    raise
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Log startup information
+logger.info(f"Starting application in {settings.ENVIRONMENT} environment")
+logger.info(f"API prefix: {settings.API_V1_PREFIX}")
 
 # Create FastAPI application
 app = FastAPI(
@@ -222,6 +231,20 @@ async def validation_exception_handler(request, exc):
             success=False,
             message="Validation error",
             data={"detail": exc.detail if hasattr(exc, 'detail') else str(exc)}
+        ).dict()
+    )
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global exception: {exc}")
+    logger.error(f"Traceback: {traceback.format_exc()}")
+    return JSONResponse(
+        status_code=500,
+        content=APIResponse(
+            success=False,
+            message="Internal server error",
+            data={"error": str(exc), "path": str(request.url)}
         ).dict()
     )
 
