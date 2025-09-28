@@ -31,23 +31,20 @@ async def notify_frontend_of_new_data(record_id, data):
         webhook_payload = {
             "event": "new_detection_data",
             "record_id": record_id,
-            "data": data,
+            "detection_results": data.get("detection_results"),
             "timestamp": datetime.utcnow().isoformat(),
             "secret": WEBHOOK_SECRET
         }
-        
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 FRONTEND_WEBHOOK_URL,
                 json=webhook_payload,
                 timeout=10.0
             )
-            
         if response.status_code == 200:
             logger.info(f"Webhook sent successfully to frontend for record {record_id}")
         else:
             logger.warning(f"Webhook failed with status {response.status_code}: {response.text}")
-            
     except Exception as e:
         logger.error(f"Error sending webhook to frontend: {e}")
         raise
@@ -116,29 +113,25 @@ async def push_data(
         # Prepare the JSON data for the simplified schema
         json_data = {
             "received_at": datetime.utcnow().isoformat(),
-            "data": payload.data,
+            "detection_results": payload.data.get("detection_results"),
             "metadata": payload.metadata or {},
             "processed": True
         }
-        
         # Store in database (simplified schema: id, created_at, json_data)
         try:
             result = await supabase_client.insert_data("push_requests", json_data)
             logger.info(f"Data stored successfully: {result}")
-            
             # Notify frontend if detection_results are present
-            if "detection_results" in payload.data:
+            if json_data["detection_results"] is not None:
                 try:
-                    await notify_frontend_of_new_data(result.data[0]["id"], payload.data)
+                    await notify_frontend_of_new_data(result.data[0]["id"], json_data)
                     logger.info("Frontend notification sent successfully")
                 except Exception as webhook_error:
                     logger.error(f"Frontend notification error: {webhook_error}")
-                    
         except Exception as db_error:
             logger.error(f"Database error: {db_error}")
             # Continue processing even if DB fails (optional behavior)
             json_data["database_error"] = str(db_error)
-        
         return APIResponse(
             success=True,
             message="Data processed successfully",
