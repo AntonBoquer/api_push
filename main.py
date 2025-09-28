@@ -113,7 +113,8 @@ async def push_data(
         # Prepare the JSON data for the simplified schema
         json_data = {
             "received_at": datetime.utcnow().isoformat(),
-            "detection_results": payload.data.get("detection_results"),
+            "detection_results": payload.detection_results,
+            "summary": payload.summary,
             "metadata": payload.metadata or {},
             "processed": True
         }
