@@ -77,7 +77,7 @@ Authorization: Bearer your_bearer_token_here
 
 #### **Windows Command Prompt:**
 ```cmd
-curl -X POST "https://api-push-2oek.vercel.app/api/v1/push" -H "Authorization: Bearer YOUR_TOKEN_HERE" -H "Content-Type: application/json" -d "{\"data\": {\"detection_results\": [{\"image\": \"bus_interior.jpg\", \"class_id\": 1, \"class_name\": \"unoccupied\", \"confidence\": 0.9101, \"x_min\": 2718.45, \"y_min\": 1587.07, \"x_max\": 3177.09, \"y_max\": 2442.6}, {\"image\": \"bus_interior.jpg\", \"class_id\": 0, \"class_name\": \"occupied\", \"confidence\": 0.9013, \"x_min\": 2178.01, \"y_min\": 1583.09, \"x_max\": 2669.04, \"y_max\": 2438.98}], \"summary\": {\"total_detections\": 41, \"occupied_seats\": 18, \"unoccupied_seats\": 23, \"occupancy_percentage\": 43.9}}}"
+curl -X POST "https://your-api.vercel.app/api/v1/push" -H "Authorization: Bearer YOUR_TOKEN_HERE" -H "Content-Type: application/json" -d "{\"data\": {\"detection_results\": [{\"image\": \"bus_interior.jpg\", \"class_id\": 1, \"class_name\": \"unoccupied\", \"confidence\": 0.9101, \"x_min\": 2718.45, \"y_min\": 1587.07, \"x_max\": 3177.09, \"y_max\": 2442.6}, {\"image\": \"bus_interior.jpg\", \"class_id\": 0, \"class_name\": \"occupied\", \"confidence\": 0.9013, \"x_min\": 2178.01, \"y_min\": 1583.09, \"x_max\": 2669.04, \"y_max\": 2438.98}], \"summary\": {\"total_detections\": 41, \"occupied_seats\": 18, \"unoccupied_seats\": 23, \"occupancy_percentage\": 43.9}}}"
 ```
 
 #### **PowerShell/Linux/Mac:**
@@ -119,7 +119,7 @@ curl -X POST "https://your-api.vercel.app/api/v1/push" \
   }'
 ```
 
-#### **Python Example:**
+#### **Python Example (Simple):**
 ```python
 import requests
 import json
@@ -164,6 +164,292 @@ if response.status_code == 200:
     print(f"📊 Occupancy: {occupied}/{occupied+unoccupied} seats occupied")
 else:
     print(f"❌ Error: {response.status_code} - {response.text}")
+```
+
+#### **Python Implementation (Advanced):**
+```python
+#!/usr/bin/env python3
+"""
+Advanced Python client for Bus Occupancy API Push System
+Supports both detection_results and detections formats with comprehensive error handling
+"""
+
+import requests
+import json
+import sys
+import time
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+class BusOccupancyAPIClient:
+    """Advanced client for Bus Occupancy API with comprehensive features"""
+    
+    def __init__(self, api_url: str, bearer_token: str, timeout: int = 30):
+        """
+        Initialize the API client
+        
+        Args:
+            api_url: Base URL of the API
+            bearer_token: Bearer token for authentication
+            timeout: Request timeout in seconds
+        """
+        self.api_url = api_url.rstrip('/')
+        self.bearer_token = bearer_token
+        self.timeout = timeout
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Authorization': f'Bearer {bearer_token}',
+            'Content-Type': 'application/json',
+            'User-Agent': 'BusOccupancyClient/1.0'
+        })
+    
+    def health_check(self) -> Dict:
+        """Check API health and connectivity"""
+        try:
+            response = self.session.get(f"{self.api_url}/health", timeout=self.timeout)
+            response.raise_for_status()
+            return {"status": "healthy", "data": response.json()}
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Health check failed: {e}")
+            return {"status": "unhealthy", "error": str(e)}
+    
+    def load_detection_data(self, file_path: str) -> Optional[Dict]:
+        """Load detection data from JSON file with format detection"""
+        try:
+            with open(file_path, 'r') as file:
+                data = json.load(file)
+            
+            # Handle different JSON formats
+            if isinstance(data, dict):
+                if 'detections' in data:
+                    logger.info(f"Loaded data with 'detections' key ({len(data['detections'])} items)")
+                    return data
+                elif 'detection_results' in data:
+                    logger.info(f"Loaded data with 'detection_results' key ({len(data['detection_results'])} items)")
+                    return data
+                elif isinstance(data.get('data'), list):
+                    # Direct array in data field
+                    return {'detections': data['data']}
+            elif isinstance(data, list):
+                # Direct array format
+                logger.info(f"Loaded direct array format ({len(data)} items)")
+                return {'detections': data}
+            
+            logger.warning("Unrecognized JSON format")
+            return data
+            
+        except FileNotFoundError:
+            logger.error(f"File not found: {file_path}")
+            return None
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in {file_path}: {e}")
+            return None
+    
+    def analyze_detections(self, detections: List[Dict]) -> Tuple[int, int, int, float]:
+        """Analyze detection data and return statistics"""
+        occupied = sum(1 for d in detections if d.get('class_id') == 0 or d.get('class_name') == 'occupied')
+        unoccupied = sum(1 for d in detections if d.get('class_id') == 1 or d.get('class_name') == 'unoccupied')
+        total = len(detections)
+        occupancy_rate = (occupied / total * 100) if total > 0 else 0
+        
+        return occupied, unoccupied, total, occupancy_rate
+    
+    def prepare_payload(self, data: Dict, include_summary: bool = True) -> Dict:
+        """Prepare API payload from detection data"""
+        # Extract detections from various formats
+        detections = []
+        inference_time = data.get('inference_time_sec', 0.0)
+        
+        if 'detections' in data:
+            detections = data['detections']
+            detection_key = 'detections'
+        elif 'detection_results' in data:
+            detections = data['detection_results']
+            detection_key = 'detection_results'
+        else:
+            logger.error("No detections found in data")
+            return {}
+        
+        # Analyze detections
+        occupied, unoccupied, total, occupancy_rate = self.analyze_detections(detections)
+        
+        # Prepare payload
+        payload = {
+            "data": {
+                detection_key: detections
+            }
+        }
+        
+        # Add inference time if available
+        if inference_time > 0:
+            payload["data"]["inference_time_sec"] = inference_time
+        
+        # Add summary if requested
+        if include_summary:
+            payload["data"]["summary"] = {
+                "total_detections": total,
+                "occupied_seats": occupied,
+                "unoccupied_seats": unoccupied,
+                "occupancy_percentage": round(occupancy_rate, 1),
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        return payload
+    
+    def push_detection_data(self, payload: Dict, endpoint: str = "/api/v1/push") -> Dict:
+        """Push detection data to the API"""
+        try:
+            url = f"{self.api_url}{endpoint}"
+            logger.info(f"Sending request to {url}")
+            
+            response = self.session.post(url, json=payload, timeout=self.timeout)
+            response.raise_for_status()
+            
+            result = response.json()
+            logger.info(f"✅ Success: {result.get('message', 'Request completed')}")
+            return {
+                "success": True,
+                "status_code": response.status_code,
+                "data": result
+            }
+            
+        except requests.exceptions.HTTPError as e:
+            error_msg = f"HTTP Error {response.status_code}: {response.text}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "status_code": response.status_code,
+                "error": error_msg,
+                "response_text": response.text
+            }
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Request failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+    
+    def push_from_file(self, file_path: str, endpoint: str = "/api/v1/push") -> Dict:
+        """Load detection data from file and push to API"""
+        # Load data
+        data = self.load_detection_data(file_path)
+        if not data:
+            return {"success": False, "error": "Failed to load detection data"}
+        
+        # Prepare payload
+        payload = self.prepare_payload(data)
+        if not payload:
+            return {"success": False, "error": "Failed to prepare payload"}
+        
+        # Push to API
+        return self.push_detection_data(payload, endpoint)
+
+# Example usage and testing
+def main():
+    """Example usage of the BusOccupancyAPIClient"""
+    
+    # Configuration
+    API_URL = "https://your-api.vercel.app"  # Replace with your API URL
+    BEARER_TOKEN = "YOUR_TOKEN_HERE"         # Replace with your bearer token
+    
+    # Initialize client
+    client = BusOccupancyAPIClient(API_URL, BEARER_TOKEN)
+    
+    # Health check
+    print("🏥 Checking API health...")
+    health = client.health_check()
+    if health["status"] == "healthy":
+        print("✅ API is healthy")
+    else:
+        print(f"❌ API health check failed: {health.get('error')}")
+        return
+    
+    # Push detection data from file
+    json_file = "detection_results3.json"  # Replace with your file path
+    
+    print(f"\n📤 Pushing detection data from {json_file}...")
+    result = client.push_from_file(json_file)
+    
+    if result["success"]:
+        data = result["data"]
+        summary = data.get("data", {}).get("summary", {})
+        print(f"✅ Data pushed successfully!")
+        print(f"📊 Summary:")
+        print(f"   • Total detections: {summary.get('total_detections', 'N/A')}")
+        print(f"   • Occupied seats: {summary.get('occupied_seats', 'N/A')}")
+        print(f"   • Unoccupied seats: {summary.get('unoccupied_seats', 'N/A')}")
+        print(f"   • Occupancy rate: {summary.get('occupancy_percentage', 'N/A')}%")
+    else:
+        print(f"❌ Failed to push data: {result.get('error')}")
+        if 'response_text' in result:
+            print(f"📝 Response: {result['response_text']}")
+
+if __name__ == "__main__":
+    main()
+```
+
+#### **Quick Python Script:**
+```python
+# quick_push.py - Simple script to push detection data
+import requests
+import json
+import sys
+
+def quick_push(file_path, api_url, token):
+    """Quick function to push detection data to API"""
+    
+    # Load data
+    with open(file_path, 'r') as f:
+        data = json.load(f)
+    
+    # Extract detections (handle both formats)
+    detections = data.get('detections') or data.get('detection_results', [])
+    
+    # Count occupancy
+    occupied = sum(1 for d in detections if d.get('class_id') == 0)
+    total = len(detections)
+    
+    # Prepare payload
+    payload = {
+        "data": {
+            "detections": detections,
+            "summary": {
+                "total_detections": total,
+                "occupied_seats": occupied,
+                "unoccupied_seats": total - occupied,
+                "occupancy_percentage": round(occupied/total*100, 1) if total > 0 else 0
+            }
+        }
+    }
+    
+    # Send request
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    response = requests.post(f"{api_url}/api/v1/push", json=payload, headers=headers)
+    
+    if response.status_code == 200:
+        print(f"✅ Success! Pushed {total} detections ({occupied} occupied)")
+        return True
+    else:
+        print(f"❌ Error {response.status_code}: {response.text}")
+        return False
+
+# Usage: python quick_push.py detection_results3.json
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python quick_push.py <json_file>")
+        sys.exit(1)
+    
+    file_path = sys.argv[1]
+    api_url = "https://your-api.vercel.app"  # Replace with your URL
+    token = "YOUR_TOKEN_HERE"                # Replace with your token
+    
+    quick_push(file_path, api_url, token)
 ```
 
 ### Update Bus Occupancy
@@ -297,4 +583,3 @@ All requests and errors are logged with appropriate levels:
 ## License
 
 This project is licensed under the MIT License.
-
