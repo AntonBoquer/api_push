@@ -114,6 +114,8 @@ async def push_data(
         json_data = {
             "received_at": datetime.utcnow().isoformat(),
             "detection_results": payload.detection_results,
+            "timestamp": payload.timestamp,
+            "inference_time_sec": payload.inference_time_sec,
             "summary": payload.summary,
             "metadata": payload.metadata or {},
             "processed": True
