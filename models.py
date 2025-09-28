@@ -11,6 +11,8 @@ class APIResponse(BaseModel):
 
 class PushPayload(BaseModel):
     detection_results: List[Dict[str, Any]]
+    timestamp: Optional[str] = None
+    inference_time_sec: Optional[float] = None
     summary: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, Any]] = None
 
