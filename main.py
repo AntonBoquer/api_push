@@ -111,8 +111,11 @@ async def push_data(
         logger.info(f"Received push request with token: {token[:10]}...")
         
         # Prepare the JSON data for the simplified schema
+        import pytz
+        phil_tz = pytz.timezone('Asia/Manila')
+        received_at_ph = datetime.now(phil_tz).isoformat()
         json_data = {
-            "received_at": datetime.utcnow().isoformat(),
+            "received_at": received_at_ph,
             "detection_results": payload.detection_results,
             "timestamp": payload.timestamp,
             "inference_time_sec": payload.inference_time_sec,
