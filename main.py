@@ -138,7 +138,7 @@ async def push_data(
             message="Data processed successfully",
             data={
                 "processed_data": json_data,
-                "payload_size": len(str(payload.data))
+                "payload_size": len(str(payload.detection_results))
             }
         )
         
