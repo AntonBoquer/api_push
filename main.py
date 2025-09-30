@@ -100,44 +100,60 @@ async def health_check():
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service unhealthy"
         )
-from fastapi import BackgroundTasks
 
 @app.post(f"{settings.API_V1_PREFIX}/push", response_model=APIResponse)
 async def push_data(
     payload: PushPayload,
-    background_tasks: BackgroundTasks,
-    token: str = Depends(verify_bearer_token),
+    token: str = Depends(verify_bearer_token)
 ):
-    # Format JSON payload using top-level fields from PushPayload
-    json_data = {
-        "detection_results": getattr(payload, "detection_results", None),
-        "inference_time_sec": getattr(payload, "inference_time_sec", None),
-        "timestamp": getattr(payload, "timestamp", None),
-        "model": getattr(payload, "model", None),
-        "source": getattr(payload, "source", None),
-    }
-
-    # Save to Supabase (still awaited, so DB write is confirmed)
-    result = await supabase_client.insert_data("push_requests", json_data)
-
-    # 🔑 Run webhook in the background (doesn't block response)
-    if getattr(payload, "detection_results", None) is not None:
-        background_tasks.add_task(
-            notify_frontend_of_new_data,
-            result.data[0]["id"],
-            json_data
-        )
-
-    # Respond immediately
-    return APIResponse(
-        success=True,
-        message="Data processed successfully",
-        data={
-            "processed_data": json_data,
-            "payload_size": len(str(json_data))
+    """
+    Handle push requests with JSON payload
+    Requires bearer token authentication
+    """
+    try:
+        logger.info(f"Received push request with token: {token[:10]}...")
+        
+        # Prepare the JSON data for the simplified schema
+        json_data = {
+            "received_at": datetime.utcnow().isoformat(),
+            "data": payload.data,
+            "metadata": payload.metadata or {},
+            "processed": True
         }
-    )
-
+        
+        # Store in database (simplified schema: id, created_at, json_data)
+        try:
+            result = await supabase_client.insert_data("push_requests", json_data)
+            logger.info(f"Data stored successfully: {result}")
+            
+            # Notify frontend if detection_results are present
+            if "detection_results" in payload.data:
+                try:
+                    await notify_frontend_of_new_data(result.data[0]["id"], payload.data)
+                    logger.info("Frontend notification sent successfully")
+                except Exception as webhook_error:
+                    logger.error(f"Frontend notification error: {webhook_error}")
+                    
+        except Exception as db_error:
+            logger.error(f"Database error: {db_error}")
+            # Continue processing even if DB fails (optional behavior)
+            json_data["database_error"] = str(db_error)
+        
+        return APIResponse(
+            success=True,
+            message="Data processed successfully",
+            data={
+                "processed_data": json_data,
+                "payload_size": len(str(payload.data))
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error processing push request: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process request: {str(e)}"
+        )
 
 @app.post(f"{settings.API_V1_PREFIX}/bus-occupancy", response_model=APIResponse)
 async def update_bus_occupancy(
