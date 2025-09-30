@@ -108,24 +108,24 @@ async def push_data(
     background_tasks: BackgroundTasks,
     token: str = Depends(verify_bearer_token),
 ):
-    # Format JSON payload
+    # Format JSON payload using top-level fields from PushPayload
     json_data = {
-        "data": payload.data,
-        "inference_time_sec": payload.data.get("inference_time_sec"),
-        "timestamp": payload.data.get("timestamp"),
-        "model": payload.data.get("model"),
-        "source": payload.data.get("source"),
+        "detection_results": getattr(payload, "detection_results", None),
+        "inference_time_sec": getattr(payload, "inference_time_sec", None),
+        "timestamp": getattr(payload, "timestamp", None),
+        "model": getattr(payload, "model", None),
+        "source": getattr(payload, "source", None),
     }
 
     # Save to Supabase (still awaited, so DB write is confirmed)
     result = await supabase_client.insert_data("push_requests", json_data)
 
     # 🔑 Run webhook in the background (doesn't block response)
-    if "detection_results" in payload.data:
+    if getattr(payload, "detection_results", None) is not None:
         background_tasks.add_task(
             notify_frontend_of_new_data,
             result.data[0]["id"],
-            payload.data
+            json_data
         )
 
     # Respond immediately
@@ -134,7 +134,7 @@ async def push_data(
         message="Data processed successfully",
         data={
             "processed_data": json_data,
-            "payload_size": len(str(payload.data))
+            "payload_size": len(str(json_data))
         }
     )
 
