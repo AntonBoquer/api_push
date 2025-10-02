@@ -32,8 +32,9 @@ async def notify_frontend_of_new_data(record_id, data):
         webhook_payload = {
             "event": "new_detection_data",
             "record_id": record_id,
-            "data": data,
-            "timestamp": datetime.utcnow().isoformat(),
+            "inference_time_sec": data.get("inference_time_sec"),
+            "detection_results": data.get("detection_results", []),
+            "timestamp": data.get("timestamp") or data.get("received_at") or datetime.utcnow().isoformat(),
             "secret": WEBHOOK_SECRET
         }
         
