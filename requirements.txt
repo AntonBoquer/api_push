@@ -5,4 +5,4 @@ python-dotenv==1.0.0
 pydantic==2.5.0
 httpx>=0.24.0,<0.25.0
 mangum==0.17.0
-pytz
+uuid==1.30.0
