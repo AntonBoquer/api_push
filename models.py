@@ -16,8 +16,8 @@ class PushPayload(BaseModel):
     uuid: Optional[UUID] = Field(
         None, description="Unique identifier for the payload (nullable if not provided)"
     )    
-    data: Dict[str, Any] = Field(..., description="The JSON data to be processed")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Optional metadata")
+    detection_results: Dict[str, Any] = Field(..., description="The JSON data to be processed")
+    # metadata: Optional[Dict[str, Any]] = Field(None, description="Optional metadata")
 
 class BusOccupancyData(BaseModel):
     """Example model for bus occupancy data"""
