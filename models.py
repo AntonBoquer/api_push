@@ -13,7 +13,9 @@ class APIResponse(BaseModel):
 
 class PushPayload(BaseModel):
     """Model for incoming push request payload"""
-    uuid: uuid.UUID = Field(..., description="Unique identifier for the payload")
+    uuid: Optional[UUID] = Field(
+        None, description="Unique identifier for the payload (nullable if not provided)"
+    )    
     data: Dict[str, Any] = Field(..., description="The JSON data to be processed")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Optional metadata")
 
