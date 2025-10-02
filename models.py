@@ -1,7 +1,10 @@
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Optional
 from datetime import datetime
-import uuid
+import importlib.util
+
+spec = importlib.util.find_spec("uuid")
+uuid = spec.loader.load_module()
 
 class APIResponse(BaseModel):
     """Standard API response model"""
