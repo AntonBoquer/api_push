@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Any, Dict, Optional
 from datetime import datetime
 import importlib.util
-import uuid
+from uuid import UUID
 
 class APIResponse(BaseModel):
     """Standard API response model"""
