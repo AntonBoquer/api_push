@@ -5,6 +5,7 @@ import logging
 import os
 from datetime import datetime
 from typing import Any
+import uuid
 
 # Local imports
 from config import settings
@@ -115,11 +116,14 @@ async def push_data(
         
         # Prepare the JSON data for the simplified schema
         json_data = {
-            "uuid": str(payload.uuid),
-            "received_at": datetime.utcnow().isoformat(),
-            "data": payload.data,
+            "uuid": str(payload.uuid) if payload.uuid else str(uuid.uuid4()),
+            "received_at": payload.received_at or datetime.utcnow().isoformat(),
+            "detection_results": [result.dict() for result in payload.detection_results],
             "metadata": payload.metadata or {},
-            "processed": True
+            "processed": payload.processed if payload.processed is not None else True,
+            "inference_time_sec": payload.inference_time_sec,
+            "summary": payload.summary,
+            "timestamp": payload.timestamp
         }
 
         
@@ -129,9 +133,9 @@ async def push_data(
             logger.info(f"Data stored successfully: {result}")
             
             # Notify frontend if detection_results are present
-            if "detection_results" in payload.data:
+            if payload.detection_results:
                 try:
-                    await notify_frontend_of_new_data(result.data[0]["id"], payload.data)
+                    await notify_frontend_of_new_data(result.data[0]["id"], json_data)
                     logger.info("Frontend notification sent successfully")
                 except Exception as webhook_error:
                     logger.error(f"Frontend notification error: {webhook_error}")
@@ -146,7 +150,7 @@ async def push_data(
             message="Data processed successfully",
             data={
                 "processed_data": json_data,
-                "payload_size": len(str(payload.data))
+                "detection_count": len(payload.detection_results)
             }
         )
         

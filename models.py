@@ -24,10 +24,14 @@ class DetectionResult(BaseModel):
 
 class PushPayload(BaseModel):
     """Model for incoming push request payload"""
-    uuid: Optional[UUID] = Field(
-        None, description="Unique identifier for the payload (nullable if not provided)"
-    )    
-    detection_results: List[DetectionResult] = Field(default_factory=list)    # metadata: Optional[Dict[str, Any]] = Field(None, description="Optional metadata")
+    uuid: Optional[str] = Field(None, description="Unique identifier for the payload")
+    detection_results: List[DetectionResult] = Field(default_factory=list)
+    summary: Optional[Any] = None
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    processed: Optional[bool] = None
+    timestamp: Optional[Any] = None
+    received_at: Optional[str] = None
+    inference_time_sec: Optional[float] = None
 
 class BusOccupancyData(BaseModel):
     """Example model for bus occupancy data"""
