@@ -12,6 +12,7 @@ A Python FastAPI application for handling push requests with bearer token authen
 - 📊 Comprehensive logging and error handling
 - 🔍 Health check endpoints
 - 📝 Automatic API documentation
+- 🔔 Webhook notifications to frontend on new detection data
 
 ## Quick Start
 
@@ -32,6 +33,10 @@ SUPABASE_KEY=your_supabase_anon_key
 
 # API Security
 BEARER_TOKEN=your_bearer_token_for_authentication
+
+# Webhook Configuration (Optional)
+FRONTEND_WEBHOOK_URL=https://your-frontend.vercel.app/api/webhook/new-data
+WEBHOOK_SECRET=your-webhook-secret-key
 
 # Environment
 ENVIRONMENT=development
@@ -75,9 +80,44 @@ Authorization: Bearer your_bearer_token_here
 
 ### Push Detection Results Data
 
-#### **Windows Command Prompt:**
-```cmd
-curl -X POST "https://your-api.vercel.app/api/v1/push" -H "Authorization: Bearer YOUR_TOKEN_HERE" -H "Content-Type: application/json" -d "{\"data\": {\"detection_results\": [{\"image\": \"bus_interior.jpg\", \"class_id\": 1, \"class_name\": \"unoccupied\", \"confidence\": 0.9101, \"x_min\": 2718.45, \"y_min\": 1587.07, \"x_max\": 3177.09, \"y_max\": 2442.6}, {\"image\": \"bus_interior.jpg\", \"class_id\": 0, \"class_name\": \"occupied\", \"confidence\": 0.9013, \"x_min\": 2178.01, \"y_min\": 1583.09, \"x_max\": 2669.04, \"y_max\": 2438.98}], \"summary\": {\"total_detections\": 41, \"occupied_seats\": 18, \"unoccupied_seats\": 23, \"occupancy_percentage\": 43.9}}}"
+#### **Payload Field Descriptions:**
+- `uuid` (optional): Unique identifier for the detection batch
+- `detection_results` (required): Array of detection objects
+  - `image`: Image file path/name
+  - `x_min`, `y_min`, `x_max`, `y_max`: Bounding box coordinates
+  - `class_id`: 0 for occupied, 1 for unoccupied
+  - `class_name`: "occupied" or "unoccupied"
+  - `confidence`: Detection confidence score (0.0 to 1.0)
+- `summary` (optional): Summary statistics object
+- `metadata` (optional): Additional metadata dictionary
+- `processed` (optional): Processing status boolean
+- `timestamp` (optional): Custom timestamp
+- `received_at` (optional): When the data was received
+- `inference_time_sec` (optional): Time taken for inference
+
+#### **Request Payload Structure:**
+```json
+{
+  "uuid": "5b1e5f62-4c90-4d7b-b0c6-37c7287d501a",
+  "detection_results": [
+    {
+      "image": "tiles/image_20250930_172500_left.jpg",
+      "x_min": 1351.92,
+      "y_min": 1507.96,
+      "x_max": 1674.40,
+      "y_max": 1725.51,
+      "class_id": 1,
+      "class_name": "unoccupied",
+      "confidence": 0.8774
+    }
+  ],
+  "summary": null,
+  "metadata": {},
+  "processed": true,
+  "timestamp": null,
+  "received_at": "2025-09-30T17:25:05.704753+08:00",
+  "inference_time_sec": 0.5928
+}
 ```
 
 #### **PowerShell/Linux/Mac:**
@@ -86,43 +126,42 @@ curl -X POST "https://your-api.vercel.app/api/v1/push" \
   -H "Authorization: Bearer YOUR_TOKEN_HERE" \
   -H "Content-Type: application/json" \
   -d '{
-    "data": {
-      "detection_results": [
-        {
-          "image": "bus_interior.jpg",
-          "class_id": 1,
-          "class_name": "unoccupied", 
-          "confidence": 0.9101,
-          "x_min": 2718.45,
-          "y_min": 1587.07,
-          "x_max": 3177.09,
-          "y_max": 2442.6
-        },
-        {
-          "image": "bus_interior.jpg",
-          "class_id": 0,
-          "class_name": "occupied",
-          "confidence": 0.9013,
-          "x_min": 2178.01,
-          "y_min": 1583.09,
-          "x_max": 2669.04,
-          "y_max": 2438.98
-        }
-      ],
-      "summary": {
-        "total_detections": 41,
-        "occupied_seats": 18,
-        "unoccupied_seats": 23,
-        "occupancy_percentage": 43.9
+    "uuid": "5b1e5f62-4c90-4d7b-b0c6-37c7287d501a",
+    "detection_results": [
+      {
+        "image": "tiles/image_20250930_172500_left.jpg",
+        "x_min": 1351.92,
+        "y_min": 1507.96,
+        "x_max": 1674.40,
+        "y_max": 1725.51,
+        "class_id": 1,
+        "class_name": "unoccupied",
+        "confidence": 0.8774
+      },
+      {
+        "image": "tiles/image_20250930_172500_left.jpg",
+        "x_min": 1465.35,
+        "y_min": 1388.22,
+        "x_max": 1727.89,
+        "y_max": 1506.17,
+        "class_id": 0,
+        "class_name": "occupied",
+        "confidence": 0.8153
       }
-    }
+    ],
+    "metadata": {},
+    "processed": true,
+    "received_at": "2025-09-30T17:25:05.704753+08:00",
+    "inference_time_sec": 0.5928
   }'
 ```
 
-#### **Python Example (Simple):**
+#### **Python Example:**
 ```python
 import requests
 import json
+from datetime import datetime
+import uuid
 
 # Configuration
 API_URL = "https://your-api.vercel.app/api/v1/push"
@@ -136,18 +175,21 @@ with open('detection_results3.json', 'r') as f:
 occupied = sum(1 for item in detection_data if item['class_name'] == 'occupied')
 unoccupied = sum(1 for item in detection_data if item['class_name'] == 'unoccupied')
 
-# Prepare the payload
+# Prepare the payload with new structure
 payload = {
-    "data": {
-        "detection_results": detection_data,
-        "summary": {
-            "total_detections": len(detection_data),
-            "occupied_seats": occupied,
-            "unoccupied_seats": unoccupied,
-            "total_seats": occupied + unoccupied,
-            "occupancy_percentage": round(occupied/(occupied+unoccupied)*100, 2)
-        }
-    }
+    "uuid": str(uuid.uuid4()),
+    "detection_results": detection_data,
+    "summary": {
+        "total_detections": len(detection_data),
+        "occupied_seats": occupied,
+        "unoccupied_seats": unoccupied,
+        "total_seats": occupied + unoccupied,
+        "occupancy_percentage": round(occupied/(occupied+unoccupied)*100, 2)
+    },
+    "metadata": {},
+    "processed": True,
+    "received_at": datetime.utcnow().isoformat() + "Z",
+    "inference_time_sec": 0.5928  # Add your actual inference time
 }
 
 # Send the request
@@ -162,294 +204,9 @@ if response.status_code == 200:
     result = response.json()
     print(f"✅ Success: {result['message']}")
     print(f"📊 Occupancy: {occupied}/{occupied+unoccupied} seats occupied")
+    print(f"🔑 UUID: {payload['uuid']}")
 else:
     print(f"❌ Error: {response.status_code} - {response.text}")
-```
-
-#### **Python Implementation (Advanced):**
-```python
-#!/usr/bin/env python3
-"""
-Advanced Python client for Bus Occupancy API Push System
-Supports both detection_results and detections formats with comprehensive error handling
-"""
-
-import requests
-import json
-import sys
-import time
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-class BusOccupancyAPIClient:
-    """Advanced client for Bus Occupancy API with comprehensive features"""
-    
-    def __init__(self, api_url: str, bearer_token: str, timeout: int = 30):
-        """
-        Initialize the API client
-        
-        Args:
-            api_url: Base URL of the API
-            bearer_token: Bearer token for authentication
-            timeout: Request timeout in seconds
-        """
-        self.api_url = api_url.rstrip('/')
-        self.bearer_token = bearer_token
-        self.timeout = timeout
-        self.session = requests.Session()
-        self.session.headers.update({
-            'Authorization': f'Bearer {bearer_token}',
-            'Content-Type': 'application/json',
-            'User-Agent': 'BusOccupancyClient/1.0'
-        })
-    
-    def health_check(self) -> Dict:
-        """Check API health and connectivity"""
-        try:
-            response = self.session.get(f"{self.api_url}/health", timeout=self.timeout)
-            response.raise_for_status()
-            return {"status": "healthy", "data": response.json()}
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Health check failed: {e}")
-            return {"status": "unhealthy", "error": str(e)}
-    
-    def load_detection_data(self, file_path: str) -> Optional[Dict]:
-        """Load detection data from JSON file with format detection"""
-        try:
-            with open(file_path, 'r') as file:
-                data = json.load(file)
-            
-            # Handle different JSON formats
-            if isinstance(data, dict):
-                if 'detections' in data:
-                    logger.info(f"Loaded data with 'detections' key ({len(data['detections'])} items)")
-                    return data
-                elif 'detection_results' in data:
-                    logger.info(f"Loaded data with 'detection_results' key ({len(data['detection_results'])} items)")
-                    return data
-                elif isinstance(data.get('data'), list):
-                    # Direct array in data field
-                    return {'detections': data['data']}
-            elif isinstance(data, list):
-                # Direct array format
-                logger.info(f"Loaded direct array format ({len(data)} items)")
-                return {'detections': data}
-            
-            logger.warning("Unrecognized JSON format")
-            return data
-            
-        except FileNotFoundError:
-            logger.error(f"File not found: {file_path}")
-            return None
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in {file_path}: {e}")
-            return None
-    
-    def analyze_detections(self, detections: List[Dict]) -> Tuple[int, int, int, float]:
-        """Analyze detection data and return statistics"""
-        occupied = sum(1 for d in detections if d.get('class_id') == 0 or d.get('class_name') == 'occupied')
-        unoccupied = sum(1 for d in detections if d.get('class_id') == 1 or d.get('class_name') == 'unoccupied')
-        total = len(detections)
-        occupancy_rate = (occupied / total * 100) if total > 0 else 0
-        
-        return occupied, unoccupied, total, occupancy_rate
-    
-    def prepare_payload(self, data: Dict, include_summary: bool = True) -> Dict:
-        """Prepare API payload from detection data"""
-        # Extract detections from various formats
-        detections = []
-        inference_time = data.get('inference_time_sec', 0.0)
-        
-        if 'detections' in data:
-            detections = data['detections']
-            detection_key = 'detections'
-        elif 'detection_results' in data:
-            detections = data['detection_results']
-            detection_key = 'detection_results'
-        else:
-            logger.error("No detections found in data")
-            return {}
-        
-        # Analyze detections
-        occupied, unoccupied, total, occupancy_rate = self.analyze_detections(detections)
-        
-        # Prepare payload
-        payload = {
-            "data": {
-                detection_key: detections
-            }
-        }
-        
-        # Add inference time if available
-        if inference_time > 0:
-            payload["data"]["inference_time_sec"] = inference_time
-        
-        # Add summary if requested
-        if include_summary:
-            payload["data"]["summary"] = {
-                "total_detections": total,
-                "occupied_seats": occupied,
-                "unoccupied_seats": unoccupied,
-                "occupancy_percentage": round(occupancy_rate, 1),
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        return payload
-    
-    def push_detection_data(self, payload: Dict, endpoint: str = "/api/v1/push") -> Dict:
-        """Push detection data to the API"""
-        try:
-            url = f"{self.api_url}{endpoint}"
-            logger.info(f"Sending request to {url}")
-            
-            response = self.session.post(url, json=payload, timeout=self.timeout)
-            response.raise_for_status()
-            
-            result = response.json()
-            logger.info(f"✅ Success: {result.get('message', 'Request completed')}")
-            return {
-                "success": True,
-                "status_code": response.status_code,
-                "data": result
-            }
-            
-        except requests.exceptions.HTTPError as e:
-            error_msg = f"HTTP Error {response.status_code}: {response.text}"
-            logger.error(error_msg)
-            return {
-                "success": False,
-                "status_code": response.status_code,
-                "error": error_msg,
-                "response_text": response.text
-            }
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Request failed: {str(e)}"
-            logger.error(error_msg)
-            return {
-                "success": False,
-                "error": error_msg
-            }
-    
-    def push_from_file(self, file_path: str, endpoint: str = "/api/v1/push") -> Dict:
-        """Load detection data from file and push to API"""
-        # Load data
-        data = self.load_detection_data(file_path)
-        if not data:
-            return {"success": False, "error": "Failed to load detection data"}
-        
-        # Prepare payload
-        payload = self.prepare_payload(data)
-        if not payload:
-            return {"success": False, "error": "Failed to prepare payload"}
-        
-        # Push to API
-        return self.push_detection_data(payload, endpoint)
-
-# Example usage and testing
-def main():
-    """Example usage of the BusOccupancyAPIClient"""
-    
-    # Configuration
-    API_URL = "https://your-api.vercel.app"  # Replace with your API URL
-    BEARER_TOKEN = "YOUR_TOKEN_HERE"         # Replace with your bearer token
-    
-    # Initialize client
-    client = BusOccupancyAPIClient(API_URL, BEARER_TOKEN)
-    
-    # Health check
-    print("🏥 Checking API health...")
-    health = client.health_check()
-    if health["status"] == "healthy":
-        print("✅ API is healthy")
-    else:
-        print(f"❌ API health check failed: {health.get('error')}")
-        return
-    
-    # Push detection data from file
-    json_file = "detection_results3.json"  # Replace with your file path
-    
-    print(f"\n📤 Pushing detection data from {json_file}...")
-    result = client.push_from_file(json_file)
-    
-    if result["success"]:
-        data = result["data"]
-        summary = data.get("data", {}).get("summary", {})
-        print(f"✅ Data pushed successfully!")
-        print(f"📊 Summary:")
-        print(f"   • Total detections: {summary.get('total_detections', 'N/A')}")
-        print(f"   • Occupied seats: {summary.get('occupied_seats', 'N/A')}")
-        print(f"   • Unoccupied seats: {summary.get('unoccupied_seats', 'N/A')}")
-        print(f"   • Occupancy rate: {summary.get('occupancy_percentage', 'N/A')}%")
-    else:
-        print(f"❌ Failed to push data: {result.get('error')}")
-        if 'response_text' in result:
-            print(f"📝 Response: {result['response_text']}")
-
-if __name__ == "__main__":
-    main()
-```
-
-#### **Quick Python Script:**
-```python
-# quick_push.py - Simple script to push detection data
-import requests
-import json
-import sys
-
-def quick_push(file_path, api_url, token):
-    """Quick function to push detection data to API"""
-    
-    # Load data
-    with open(file_path, 'r') as f:
-        data = json.load(f)
-    
-    # Extract detections (handle both formats)
-    detections = data.get('detections') or data.get('detection_results', [])
-    
-    # Count occupancy
-    occupied = sum(1 for d in detections if d.get('class_id') == 0)
-    total = len(detections)
-    
-    # Prepare payload
-    payload = {
-        "data": {
-            "detections": detections,
-            "summary": {
-                "total_detections": total,
-                "occupied_seats": occupied,
-                "unoccupied_seats": total - occupied,
-                "occupancy_percentage": round(occupied/total*100, 1) if total > 0 else 0
-            }
-        }
-    }
-    
-    # Send request
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    response = requests.post(f"{api_url}/api/v1/push", json=payload, headers=headers)
-    
-    if response.status_code == 200:
-        print(f"✅ Success! Pushed {total} detections ({occupied} occupied)")
-        return True
-    else:
-        print(f"❌ Error {response.status_code}: {response.text}")
-        return False
-
-# Usage: python quick_push.py detection_results3.json
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python quick_push.py <json_file>")
-        sys.exit(1)
-    
-    file_path = sys.argv[1]
-    api_url = "https://your-api.vercel.app"  # Replace with your URL
-    token = "YOUR_TOKEN_HERE"                # Replace with your token
-    
-    quick_push(file_path, api_url, token)
 ```
 
 ### Update Bus Occupancy
@@ -470,6 +227,67 @@ curl -X POST "https://your-api.vercel.app/api/v1/bus-occupancy" \
   }'
 ```
 
+## Webhook Notifications
+
+When new detection data is pushed to `/api/v1/push`, the API automatically sends a webhook notification to your configured frontend endpoint.
+
+### Webhook Configuration
+
+Set these environment variables:
+- `FRONTEND_WEBHOOK_URL` - Your frontend webhook endpoint URL
+- `WEBHOOK_SECRET` - Shared secret for authentication
+
+### Webhook Payload Format
+
+The webhook sends the following JSON payload:
+
+```json
+{
+  "event": "new_detection_data",
+  "record_id": 3004,
+  "inference_time_sec": 0.5928,
+  "detection_results": [
+    {
+      "image": "tiles/image_20250930_172500_left.jpg",
+      "x_min": 1351.92,
+      "y_min": 1507.96,
+      "x_max": 1674.40,
+      "y_max": 1725.51,
+      "class_id": 1,
+      "class_name": "unoccupied",
+      "confidence": 0.8774
+    }
+  ],
+  "timestamp": "2025-09-30T17:25:05.704753+08:00",
+  "secret": "your-webhook-secret"
+}
+```
+
+### Frontend Webhook Handler Example
+
+```python
+from fastapi import FastAPI, HTTPException
+import os
+
+app = FastAPI()
+
+@app.post("/api/webhook/new-data")
+async def receive_webhook(webhook_data: dict):
+    # Verify the webhook secret
+    if webhook_data.get("secret") != os.getenv("WEBHOOK_SECRET"):
+        raise HTTPException(status_code=401, detail="Invalid webhook secret")
+    
+    # Extract detection data
+    record_id = webhook_data["record_id"]
+    detection_results = webhook_data["detection_results"]
+    inference_time = webhook_data["inference_time_sec"]
+    
+    # Process the detection results
+    # ... your processing logic here ...
+    
+    return {"status": "received", "record_id": record_id}
+```
+
 ## Deployment on Vercel
 
 ### 1. Install Vercel CLI
@@ -481,9 +299,11 @@ npm install -g vercel
 ### 2. Set Environment Variables
 
 In your Vercel dashboard, add these environment variables:
-- `SUPABASE_URL`
-- `SUPABASE_KEY`
-- `BEARER_TOKEN`
+- `SUPABASE_URL` - Your Supabase project URL
+- `SUPABASE_KEY` - Your Supabase anon/service key
+- `BEARER_TOKEN` - API authentication token
+- `FRONTEND_WEBHOOK_URL` - (Optional) Frontend webhook endpoint
+- `WEBHOOK_SECRET` - (Optional) Webhook authentication secret
 
 ### 3. Deploy
 
@@ -493,17 +313,21 @@ vercel --prod
 
 ## Supabase Database Schema
 
-### Simplified Schema (3 columns only)
+### Simplified Schema
 
-Both tables use the same simplified structure:
+Both tables use a simplified structure with optional uuid column:
 
 #### push_requests
 ```sql
 CREATE TABLE push_requests (
   id SERIAL PRIMARY KEY,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  uuid TEXT,
   json_data JSONB NOT NULL
 );
+
+-- Add index for uuid lookups
+CREATE INDEX IF NOT EXISTS idx_push_requests_uuid ON push_requests(uuid);
 ```
 
 #### bus_occupancy
@@ -518,6 +342,7 @@ CREATE TABLE bus_occupancy (
 **Column Descriptions:**
 - `id`: Auto-incrementing primary key
 - `created_at`: Automatically set timestamp when record is created
+- `uuid`: (push_requests only) Extracted UUID for easy querying
 - `json_data`: All the actual data stored as JSON (flexible structure)
 
 ## Response Format
