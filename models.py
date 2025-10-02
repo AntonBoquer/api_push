@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from datetime import datetime
 
 class APIResponse(BaseModel):
@@ -10,11 +10,10 @@ class APIResponse(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 class PushPayload(BaseModel):
-    detection_results: List[Dict[str, Any]]
-    timestamp: Optional[str] = None
-    inference_time_sec: Optional[float] = None
-    summary: Optional[Dict[str, Any]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    """Model for incoming push request payload"""
+    uuid: uuid.UUID = Field(..., description="Unique identifier for the payload")
+    data: Dict[str, Any] = Field(..., description="The JSON data to be processed")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Optional metadata")
 
 class BusOccupancyData(BaseModel):
     """Example model for bus occupancy data"""
