@@ -112,13 +112,12 @@ async def push_data(
     """
     try:
         logger.info(f"Received push request with token: {token[:10]}...")
-        
-        # Prepare the JSON data for the simplified schema
+
         import uuid
+        # ✅ Use existing UUID if provided, otherwise generate one
+        record_uuid = getattr(payload, "uuid", None) or str(uuid.uuid4())
 
-        # Ensure we keep the same UUID if provided, or generate one if missing
-        record_uuid = str(payload.uuid) if getattr(payload, "uuid", None) else str(uuid.uuid4())
-
+        # ✅ Prepare structured JSON for storage
         json_data = {
             "uuid": record_uuid,
             "received_at": datetime.utcnow().isoformat(),
@@ -127,44 +126,49 @@ async def push_data(
             "processed": True
         }
 
-        
-        # Store in database (simplified schema: id, created_at, json_data)
+        # ✅ Determine target table dynamically (optional)
+        # Use environment variable or metadata hint if you plan to separate tables
+        target_table = (
+            payload.metadata.get("target_table")
+            if payload.metadata and "target_table" in payload.metadata
+            else "push_requests"
+        )
+
         try:
-            result = await supabase_client.insert_data("push_requests", json_data)
-            logger.info(f"Data stored successfully: {result}")
-            
-            # Notify frontend if detection_results are present
-            if "detection_results" in payload.data:
+            result = await supabase_client.insert_data(target_table, json_data)
+            logger.info(f"Data stored successfully in '{target_table}': {result}")
+
+            # ✅ Send webhook if detection results exist
+            if isinstance(payload.data, dict) and "detection_results" in payload.data:
                 try:
                     await notify_frontend_of_new_data(
                         record_id=result.data[0]["id"],
                         data={**payload.data, "uuid": record_uuid}
                     )
-                    logger.info(f"Frontend notification sent successfully for UUID {record_uuid}")
+                    logger.info(f"Frontend notified for UUID {record_uuid}")
                 except Exception as webhook_error:
-                    logger.error(f"Frontend notification error: {webhook_error}")
+                    logger.error(f"Frontend notification failed: {webhook_error}")
 
-                    
         except Exception as db_error:
             logger.error(f"Database error: {db_error}")
-            # Continue processing even if DB fails (optional behavior)
             json_data["database_error"] = str(db_error)
-        
+
         return APIResponse(
             success=True,
-            message="Data processed successfully",
+            message=f"Data processed and stored in '{target_table}' successfully",
             data={
                 "processed_data": json_data,
                 "payload_size": len(str(payload.data))
             }
         )
-        
+
     except Exception as e:
         logger.error(f"Error processing push request: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process request: {str(e)}"
         )
+
 
 @app.post(f"{settings.API_V1_PREFIX}/bus-occupancy", response_model=APIResponse)
 async def update_bus_occupancy(

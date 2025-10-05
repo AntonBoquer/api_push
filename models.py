@@ -1,8 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from datetime import datetime
-import importlib.util
-from uuid import UUID
 
 class APIResponse(BaseModel):
     """Standard API response model"""
@@ -11,27 +9,12 @@ class APIResponse(BaseModel):
     data: Optional[Any] = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
-class DetectionResult(BaseModel):
-    image: str
-    x_max: float
-    x_min: float
-    y_max: float
-    y_min: float
-    class_id: int
-    class_name: str
-    confidence: float
-
-
 class PushPayload(BaseModel):
     """Model for incoming push request payload"""
-    uuid: Optional[str] = Field(None, description="Unique identifier for the payload")
-    detection_results: List[DetectionResult] = Field(default_factory=list)
-    summary: Optional[Any] = None
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    processed: Optional[bool] = None
-    timestamp: Optional[Any] = None
-    received_at: Optional[str] = None
-    inference_time_sec: Optional[float] = None
+    uuid: Optional[str] = None
+    detection_results: Optional[Any] = None
+    metadata: Optional[Dict[str, Any]] = None
+
 
 class BusOccupancyData(BaseModel):
     """Example model for bus occupancy data"""
