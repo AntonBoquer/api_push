@@ -1,8 +1,10 @@
-from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 import os
+import uuid
+import time
 from datetime import datetime
 from typing import Any
 
@@ -22,10 +24,8 @@ async def notify_frontend_of_new_data(record_id, data):
     Send webhook notification to frontend deployment about new detection data
     """
     import httpx
-    import time
     
     start_time = time.time()
-    logger.info(f"🚀 Background webhook task STARTED for record {record_id}")
     
     # Configure your frontend webhook URL
     FRONTEND_WEBHOOK_URL = os.getenv("FRONTEND_WEBHOOK_URL", "https://your-frontend-deployment.vercel.app/api/webhook/new-data")
@@ -40,16 +40,12 @@ async def notify_frontend_of_new_data(record_id, data):
             "secret": WEBHOOK_SECRET
         }
         
-        logger.info(f"🌐 Sending webhook to: {FRONTEND_WEBHOOK_URL}")
-        
-        async with httpx.AsyncClient(timeout=httpx.Timeout(2.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(1.5)) as client:
             response = await client.post(
                 FRONTEND_WEBHOOK_URL,
                 json=webhook_payload,
                 headers={"Content-Type": "application/json"}
             )
-            
-        logger.info(f"📡 Webhook response received: {response.status_code}")
             
         if response.status_code == 200:
             duration = time.time() - start_time
@@ -122,16 +118,8 @@ async def push_data(
     token: str = Depends(verify_bearer_token)
 ):
     try:
-        logger.info(f"Received push request with token: {token[:10]}...")
-
-        import uuid
-
-        # Use existing UUID or generate a new one
+        # Use existing UUID or generate a new one (minimal logging)
         record_uuid = payload.uuid or str(uuid.uuid4())
-        
-        # Log UUID only if debugging is needed (reduce logging overhead)
-        if not payload.uuid:
-            logger.info(f"Generated new UUID: {record_uuid}")
 
         # Use `payload.data` if it exists; otherwise use the full model dict
         if payload.data:
@@ -139,9 +127,11 @@ async def push_data(
         else:
             data_content = payload.model_dump(exclude_none=True, exclude={"metadata"})
 
+        # Optimize JSON creation (avoid datetime conversion overhead)
+        now = datetime.utcnow()
         json_data = {
             "uuid": record_uuid,
-            "received_at": datetime.utcnow().isoformat(),
+            "received_at": now.isoformat(),
             "data": data_content,
             "metadata": payload.metadata or {},
             "processed": True
@@ -149,7 +139,6 @@ async def push_data(
 
         try:
             result = await supabase_client.insert_data("push_requests", json_data)
-            logger.info(f"Data stored successfully")
 
             # Send webhook notification immediately (synchronous for reliability)
             if "detection_results" in data_content:
@@ -159,7 +148,7 @@ async def push_data(
                         record_id=record_id,
                         data={**data_content, "uuid": record_uuid}
                     )
-                    logger.info(f"📋 Push request ID: {record_id}, Webhook sent successfully for UUID {record_uuid}")
+                    pass  # Webhook sent successfully
                 except Exception as webhook_error:
                     logger.error(f"Webhook failed for record {record_id}: {webhook_error}")
                     # Continue with response even if webhook fails
