@@ -42,11 +42,11 @@ async def notify_frontend_of_new_data(record_id, data):
         
         logger.info(f"🌐 Sending webhook to: {FRONTEND_WEBHOOK_URL}")
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(2.0)) as client:
             response = await client.post(
                 FRONTEND_WEBHOOK_URL,
                 json=webhook_payload,
-                timeout=3.0  # Reduced from 10s to 3s
+                headers={"Content-Type": "application/json"}
             )
             
         logger.info(f"📡 Webhook response received: {response.status_code}")
@@ -119,7 +119,6 @@ async def health_check():
 @app.post(f"{settings.API_V1_PREFIX}/push", response_model=APIResponse)
 async def push_data(
     payload: PushPayload,
-    background_tasks: BackgroundTasks,
     token: str = Depends(verify_bearer_token)
 ):
     try:
@@ -152,15 +151,18 @@ async def push_data(
             result = await supabase_client.insert_data("push_requests", json_data)
             logger.info(f"Data stored successfully")
 
-            # Send webhook notification in background (non-blocking)
+            # Send webhook notification immediately (synchronous for reliability)
             if "detection_results" in data_content:
                 record_id = result.data[0]["id"]
-                background_tasks.add_task(
-                    notify_frontend_of_new_data,
-                    record_id=record_id,
-                    data={**data_content, "uuid": record_uuid}
-                )
-                logger.info(f"📋 Push request ID: {record_id}, Webhook queued for UUID {record_uuid}")
+                try:
+                    await notify_frontend_of_new_data(
+                        record_id=record_id,
+                        data={**data_content, "uuid": record_uuid}
+                    )
+                    logger.info(f"📋 Push request ID: {record_id}, Webhook sent successfully for UUID {record_uuid}")
+                except Exception as webhook_error:
+                    logger.error(f"Webhook failed for record {record_id}: {webhook_error}")
+                    # Continue with response even if webhook fails
 
         except Exception as db_error:
             logger.error(f"Database error: {db_error}")
