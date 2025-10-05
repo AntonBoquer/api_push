@@ -22,6 +22,10 @@ async def notify_frontend_of_new_data(record_id, data):
     Send webhook notification to frontend deployment about new detection data
     """
     import httpx
+    import time
+    
+    start_time = time.time()
+    logger.info(f"🚀 Background webhook task STARTED for record {record_id}")
     
     # Configure your frontend webhook URL
     FRONTEND_WEBHOOK_URL = os.getenv("FRONTEND_WEBHOOK_URL", "https://your-frontend-deployment.vercel.app/api/webhook/new-data")
@@ -44,12 +48,15 @@ async def notify_frontend_of_new_data(record_id, data):
             )
             
         if response.status_code == 200:
-            logger.info(f"Webhook sent successfully to frontend for record {record_id}")
+            duration = time.time() - start_time
+            logger.info(f"✅ Webhook COMPLETED successfully for record {record_id} in {duration:.2f}s")
         else:
-            logger.warning(f"Webhook failed with status {response.status_code}: {response.text}")
+            duration = time.time() - start_time
+            logger.warning(f"❌ Webhook FAILED for record {record_id} in {duration:.2f}s: {response.status_code}")
             
     except Exception as e:
-        logger.error(f"Error sending webhook to frontend: {e}")
+        duration = time.time() - start_time
+        logger.error(f"💥 Webhook ERROR for record {record_id} in {duration:.2f}s: {e}")
         # Don't raise exception in background task to avoid affecting main request
 
 # Create FastAPI application
@@ -139,12 +146,13 @@ async def push_data(
 
             # Send webhook notification in background (non-blocking)
             if "detection_results" in data_content:
+                record_id = result.data[0]["id"]
                 background_tasks.add_task(
                     notify_frontend_of_new_data,
-                    record_id=result.data[0]["id"],
+                    record_id=record_id,
                     data={**data_content, "uuid": record_uuid}
                 )
-                logger.info(f"Webhook notification queued for UUID {record_uuid}")
+                logger.info(f"📋 Push request ID: {record_id}, Webhook queued for UUID {record_uuid}")
 
         except Exception as db_error:
             logger.error(f"Database error: {db_error}")
