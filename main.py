@@ -40,7 +40,7 @@ async def notify_frontend_of_new_data(record_id, data):
             "secret": WEBHOOK_SECRET
         }
         
-        async with httpx.AsyncClient(timeout=httpx.Timeout(1.5)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(3)) as client:
             response = await client.post(
                 FRONTEND_WEBHOOK_URL,
                 json=webhook_payload,
