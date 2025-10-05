@@ -40,12 +40,16 @@ async def notify_frontend_of_new_data(record_id, data):
             "secret": WEBHOOK_SECRET
         }
         
+        logger.info(f"🌐 Sending webhook to: {FRONTEND_WEBHOOK_URL}")
+        
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 FRONTEND_WEBHOOK_URL,
                 json=webhook_payload,
                 timeout=3.0  # Reduced from 10s to 3s
             )
+            
+        logger.info(f"📡 Webhook response received: {response.status_code}")
             
         if response.status_code == 200:
             duration = time.time() - start_time
@@ -54,6 +58,10 @@ async def notify_frontend_of_new_data(record_id, data):
             duration = time.time() - start_time
             logger.warning(f"❌ Webhook FAILED for record {record_id} in {duration:.2f}s: {response.status_code}")
             
+    except httpx.TimeoutException as e:
+        duration = time.time() - start_time
+        logger.error(f"⏰ Webhook TIMEOUT for record {record_id} in {duration:.2f}s: {e}")
+        # Don't raise exception in background task to avoid affecting main request
     except Exception as e:
         duration = time.time() - start_time
         logger.error(f"💥 Webhook ERROR for record {record_id} in {duration:.2f}s: {e}")
