@@ -106,48 +106,41 @@ async def push_data(
     payload: PushPayload,
     token: str = Depends(verify_bearer_token)
 ):
-    """
-    Handle push requests with JSON payload
-    Requires bearer token authentication
-    """
     try:
         logger.info(f"Received push request with token: {token[:10]}...")
 
         import uuid
-        # ✅ Use existing UUID if provided, otherwise generate one
-        record_uuid = getattr(payload, "uuid", None) or str(uuid.uuid4())
 
-        # ✅ Prepare structured JSON for storage
+        # Use existing UUID or generate a new one
+        record_uuid = payload.uuid or str(uuid.uuid4())
+
+        # Use `payload.data` if it exists; otherwise use the full model dict
+        if payload.data:
+            data_content = payload.data
+        else:
+            data_content = payload.model_dump(exclude_none=True, exclude={"metadata"})
+
         json_data = {
             "uuid": record_uuid,
             "received_at": datetime.utcnow().isoformat(),
-            "data": payload.data,
+            "data": data_content,
             "metadata": payload.metadata or {},
             "processed": True
         }
 
-        # ✅ Determine target table dynamically (optional)
-        # Use environment variable or metadata hint if you plan to separate tables
-        target_table = (
-            payload.metadata.get("target_table")
-            if payload.metadata and "target_table" in payload.metadata
-            else "push_requests"
-        )
-
         try:
-            result = await supabase_client.insert_data(target_table, json_data)
-            logger.info(f"Data stored successfully in '{target_table}': {result}")
+            result = await supabase_client.insert_data("push_requests", json_data)
+            logger.info(f"Data stored successfully: {result}")
 
-            # ✅ Send webhook if detection results exist
-            if isinstance(payload.data, dict) and "detection_results" in payload.data:
+            if "detection_results" in data_content:
                 try:
                     await notify_frontend_of_new_data(
                         record_id=result.data[0]["id"],
-                        data={**payload.data, "uuid": record_uuid}
+                        data={**data_content, "uuid": record_uuid}
                     )
-                    logger.info(f"Frontend notified for UUID {record_uuid}")
+                    logger.info(f"Frontend notification sent successfully for UUID {record_uuid}")
                 except Exception as webhook_error:
-                    logger.error(f"Frontend notification failed: {webhook_error}")
+                    logger.error(f"Frontend notification error: {webhook_error}")
 
         except Exception as db_error:
             logger.error(f"Database error: {db_error}")
@@ -155,10 +148,10 @@ async def push_data(
 
         return APIResponse(
             success=True,
-            message=f"Data processed and stored in '{target_table}' successfully",
+            message="Data processed successfully",
             data={
                 "processed_data": json_data,
-                "payload_size": len(str(payload.data))
+                "payload_size": len(str(data_content))
             }
         )
 
@@ -168,6 +161,8 @@ async def push_data(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process request: {str(e)}"
         )
+
+
 
 
 @app.post(f"{settings.API_V1_PREFIX}/bus-occupancy", response_model=APIResponse)

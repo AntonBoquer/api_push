@@ -10,11 +10,13 @@ class APIResponse(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 class PushPayload(BaseModel):
-    """Model for incoming push request payload"""
-    uuid: Optional[str] = None
-    detection_results: Optional[Any] = None
-    metadata: Optional[Dict[str, Any]] = None
-
+    """Flexible model for incoming push requests"""
+    data: Optional[Dict[str, Any]] = Field(None, description="The JSON data to be processed")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Optional metadata")
+    uuid: Optional[str] = Field(None, description="Unique record identifier")
+    # Allow extra fields like 'detection_results', 'summary', etc.
+    class Config:
+        extra = "allow"
 
 class BusOccupancyData(BaseModel):
     """Example model for bus occupancy data"""
