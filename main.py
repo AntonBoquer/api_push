@@ -5,7 +5,6 @@ import logging
 import os
 from datetime import datetime
 from typing import Any
-import uuid
 
 # Local imports
 from config import settings
@@ -32,9 +31,8 @@ async def notify_frontend_of_new_data(record_id, data):
         webhook_payload = {
             "event": "new_detection_data",
             "record_id": record_id,
-            "inference_time_sec": data.get("inference_time_sec"),
-            "detection_results": data.get("detection_results", []),
-            "timestamp": data.get("timestamp") or data.get("received_at") or datetime.utcnow().isoformat(),
+            "data": data,
+            "timestamp": datetime.utcnow().isoformat(),
             "secret": WEBHOOK_SECRET
         }
         
@@ -116,15 +114,17 @@ async def push_data(
         logger.info(f"Received push request with token: {token[:10]}...")
         
         # Prepare the JSON data for the simplified schema
+        import uuid
+
+        # Ensure we keep the same UUID if provided, or generate one if missing
+        record_uuid = str(payload.uuid) if getattr(payload, "uuid", None) else str(uuid.uuid4())
+
         json_data = {
-            "uuid": str(payload.uuid) if payload.uuid else str(uuid.uuid4()),
-            "received_at": payload.received_at or datetime.utcnow().isoformat(),
-            "detection_results": [result.dict() for result in payload.detection_results],
+            "uuid": record_uuid,
+            "received_at": datetime.utcnow().isoformat(),
+            "data": payload.data,
             "metadata": payload.metadata or {},
-            "processed": payload.processed if payload.processed is not None else True,
-            "inference_time_sec": payload.inference_time_sec,
-            "summary": payload.summary,
-            "timestamp": payload.timestamp
+            "processed": True
         }
 
         
@@ -134,12 +134,16 @@ async def push_data(
             logger.info(f"Data stored successfully: {result}")
             
             # Notify frontend if detection_results are present
-            if payload.detection_results:
+            if "detection_results" in payload.data:
                 try:
-                    await notify_frontend_of_new_data(result.data[0]["id"], json_data)
-                    logger.info("Frontend notification sent successfully")
+                    await notify_frontend_of_new_data(
+                        record_id=result.data[0]["id"],
+                        data={**payload.data, "uuid": record_uuid}
+                    )
+                    logger.info(f"Frontend notification sent successfully for UUID {record_uuid}")
                 except Exception as webhook_error:
                     logger.error(f"Frontend notification error: {webhook_error}")
+
                     
         except Exception as db_error:
             logger.error(f"Database error: {db_error}")
@@ -151,7 +155,7 @@ async def push_data(
             message="Data processed successfully",
             data={
                 "processed_data": json_data,
-                "detection_count": len(payload.detection_results)
+                "payload_size": len(str(payload.data))
             }
         )
         
