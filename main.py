@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
@@ -40,7 +40,7 @@ async def notify_frontend_of_new_data(record_id, data):
             response = await client.post(
                 FRONTEND_WEBHOOK_URL,
                 json=webhook_payload,
-                timeout=10.0
+                timeout=3.0  # Reduced from 10s to 3s
             )
             
         if response.status_code == 200:
@@ -50,7 +50,7 @@ async def notify_frontend_of_new_data(record_id, data):
             
     except Exception as e:
         logger.error(f"Error sending webhook to frontend: {e}")
-        raise
+        # Don't raise exception in background task to avoid affecting main request
 
 # Create FastAPI application
 app = FastAPI(
@@ -104,6 +104,7 @@ async def health_check():
 @app.post(f"{settings.API_V1_PREFIX}/push", response_model=APIResponse)
 async def push_data(
     payload: PushPayload,
+    background_tasks: BackgroundTasks,
     token: str = Depends(verify_bearer_token)
 ):
     try:
@@ -111,17 +112,12 @@ async def push_data(
 
         import uuid
 
-        # Log the received UUID for debugging
-        logger.info(f"Received UUID from payload: {payload.uuid}")
-        
         # Use existing UUID or generate a new one
         record_uuid = payload.uuid or str(uuid.uuid4())
         
-        # Log what UUID we're actually using
-        if payload.uuid:
-            logger.info(f"Using provided UUID: {record_uuid}")
-        else:
-            logger.info(f"No UUID provided, generated new one: {record_uuid}")
+        # Log UUID only if debugging is needed (reduce logging overhead)
+        if not payload.uuid:
+            logger.info(f"Generated new UUID: {record_uuid}")
 
         # Use `payload.data` if it exists; otherwise use the full model dict
         if payload.data:
@@ -139,17 +135,16 @@ async def push_data(
 
         try:
             result = await supabase_client.insert_data("push_requests", json_data)
-            logger.info(f"Data stored successfully: {result}")
+            logger.info(f"Data stored successfully")
 
+            # Send webhook notification in background (non-blocking)
             if "detection_results" in data_content:
-                try:
-                    await notify_frontend_of_new_data(
-                        record_id=result.data[0]["id"],
-                        data={**data_content, "uuid": record_uuid}
-                    )
-                    logger.info(f"Frontend notification sent successfully for UUID {record_uuid}")
-                except Exception as webhook_error:
-                    logger.error(f"Frontend notification error: {webhook_error}")
+                background_tasks.add_task(
+                    notify_frontend_of_new_data,
+                    record_id=result.data[0]["id"],
+                    data={**data_content, "uuid": record_uuid}
+                )
+                logger.info(f"Webhook notification queued for UUID {record_uuid}")
 
         except Exception as db_error:
             logger.error(f"Database error: {db_error}")
