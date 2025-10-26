@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
@@ -152,6 +152,7 @@ async def health_check():
 @app.post(f"{settings.API_V1_PREFIX}/push", response_model=APIResponse)
 async def push_data(
     payload: PushPayload,
+    background_tasks: BackgroundTasks,
     token: str = Depends(verify_bearer_token)
 ):
     try:
@@ -177,18 +178,16 @@ async def push_data(
         try:
             result = await supabase_client.insert_data("push_requests", json_data)
 
-            # Send webhook notification immediately (synchronous for reliability)
+            # Schedule webhook notification in background (non-blocking)
             if "detection_results" in data_content:
                 record_id = result.data[0]["id"]
-                try:
-                    await notify_frontend_of_new_data(
-                        record_id=record_id,
-                        data={**data_content, "uuid": record_uuid}
-                    )
-                    pass  # Webhook sent successfully
-                except Exception as webhook_error:
-                    logger.error(f"Webhook failed for record {record_id}: {webhook_error}")
-                    # Continue with response even if webhook fails
+                # Add to background tasks - API responds immediately without waiting
+                background_tasks.add_task(
+                    notify_frontend_of_new_data,
+                    record_id=record_id,
+                    data={**data_content, "uuid": record_uuid}
+                )
+                logger.info(f"📤 Webhook scheduled for record {record_id} (will process in background)")
 
         except Exception as db_error:
             logger.error(f"Database error: {db_error}")
