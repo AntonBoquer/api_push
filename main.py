@@ -35,6 +35,9 @@ async def notify_frontend_of_new_data(record_id, data):
     FRONTEND_WEBHOOK_URL = os.getenv("FRONTEND_WEBHOOK_URL", "https://your-frontend-deployment.vercel.app/api/webhook/new-data")
     WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "your-webhook-secret")
     
+    logger.info(f"🌐 Calling webhook URL: {FRONTEND_WEBHOOK_URL}")
+    logger.info(f"🔑 Using webhook secret: {WEBHOOK_SECRET[:10]}..." if WEBHOOK_SECRET else "NO SECRET")
+    
     try:
         webhook_payload = {
             "event": "new_detection_data",
@@ -43,6 +46,8 @@ async def notify_frontend_of_new_data(record_id, data):
             "timestamp": datetime.utcnow().isoformat(),
             "secret": WEBHOOK_SECRET
         }
+        
+        logger.info(f"📤 Sending webhook for record {record_id}...")
         
         # Use global persistent client instead of creating a new one
         response = await http_client.post(
