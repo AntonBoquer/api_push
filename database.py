@@ -9,29 +9,50 @@ logger = logging.getLogger(__name__)
 class SupabaseClient:
     def __init__(self):
         self.client: Client = None
-        self.connect()
+        self._initialized = False
     
     def connect(self):
-        """Initialize connection to Supabase"""
+        """Initialize connection to Supabase (lazy initialization)"""
+        if self._initialized:
+            return
+            
         try:
             if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
-                raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set")
+                logger.warning("SUPABASE_URL and SUPABASE_KEY are not set. Supabase client will not be available.")
+                self._initialized = True
+                return
+            
+            # Check if URL is valid (not empty string)
+            if settings.SUPABASE_URL.strip() == "" or settings.SUPABASE_KEY.strip() == "":
+                logger.warning("SUPABASE_URL or SUPABASE_KEY is empty. Supabase client will not be available.")
+                self._initialized = True
+                return
             
             self.client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            self._initialized = True
             logger.info("Successfully connected to Supabase")
         except Exception as e:
             logger.error(f"Failed to connect to Supabase: {e}")
-            raise
+            self._initialized = True
+            # Don't raise - allow the app to start even if Supabase is not configured
     
     def get_client(self) -> Client:
         """Get the Supabase client instance"""
-        if not self.client:
+        if not self._initialized:
             self.connect()
         return self.client
     
     async def insert_data(self, table_name: str, json_data: dict):
         """Insert data into a Supabase table with simplified schema"""
         try:
+            # Ensure client is initialized
+            if not self._initialized:
+                self.connect()
+            
+            if not self.client:
+                logger.warning(f"Supabase client not available. Skipping insert to {table_name}")
+                return None
+            
             # Prepare data for the simplified schema (id, created_at, json_data)
             data = {
                 "json_data": json_data
@@ -47,6 +68,14 @@ class SupabaseClient:
     async def get_data(self, table_name: str, filters: dict = None):
         """Retrieve data from a Supabase table"""
         try:
+            # Ensure client is initialized
+            if not self._initialized:
+                self.connect()
+            
+            if not self.client:
+                logger.warning(f"Supabase client not available. Skipping get from {table_name}")
+                return None
+            
             query = self.client.table(table_name).select("*")
             
             if filters:
@@ -63,6 +92,14 @@ class SupabaseClient:
     async def update_data(self, table_name: str, data: dict, filters: dict):
         """Update data in a Supabase table"""
         try:
+            # Ensure client is initialized
+            if not self._initialized:
+                self.connect()
+            
+            if not self.client:
+                logger.warning(f"Supabase client not available. Skipping update to {table_name}")
+                return None
+            
             query = self.client.table(table_name).update(data)
             
             for key, value in filters.items():

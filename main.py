@@ -179,7 +179,7 @@ async def push_data(
             result = await supabase_client.insert_data("push_requests", json_data)
 
             # Schedule webhook notification in background (non-blocking)
-            if "detection_results" in data_content:
+            if result and "detection_results" in data_content:
                 record_id = result.data[0]["id"]
                 # Add to background tasks - API responds immediately without waiting
                 background_tasks.add_task(
@@ -188,6 +188,8 @@ async def push_data(
                     data={**data_content, "uuid": record_uuid}
                 )
                 logger.info(f"📤 Webhook scheduled for record {record_id} (will process in background)")
+            elif not result:
+                logger.warning("Supabase not configured - skipping webhook notification")
 
         except Exception as db_error:
             logger.error(f"Database error: {db_error}")
