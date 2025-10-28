@@ -175,8 +175,16 @@ async def push_data(
             "processed": True
         }
 
+        db_insert_start = time.time()
         try:
+            logger.info(f"🔵 Starting database insert for UUID {record_uuid}")
             result = await supabase_client.insert_data("push_requests", json_data)
+            db_duration = time.time() - db_insert_start
+            
+            if result:
+                logger.info(f"✅ Database insert completed in {db_duration:.3f}s")
+            else:
+                logger.warning(f"⚠️ Database insert returned None (Supabase not configured)")
 
             # Schedule webhook notification in background (non-blocking)
             if result and "detection_results" in data_content:
@@ -192,7 +200,9 @@ async def push_data(
                 logger.warning("Supabase not configured - skipping webhook notification")
 
         except Exception as db_error:
-            logger.error(f"Database error: {db_error}")
+            db_duration = time.time() - db_insert_start
+            logger.error(f"❌ Database error after {db_duration:.3f}s: {db_error}")
+            logger.exception(db_error)  # Print full traceback
             json_data["database_error"] = str(db_error)
 
         return APIResponse(
@@ -239,10 +249,15 @@ async def update_bus_occupancy(
         
         # Store in database (simplified schema: id, created_at, json_data)
         try:
+            logger.info(f"🔵 Inserting bus occupancy data for bus {occupancy_data.bus_id}")
             result = await supabase_client.insert_data("bus_occupancy", json_data)
-            logger.info(f"Bus occupancy data stored successfully")
+            if result:
+                logger.info(f"✅ Bus occupancy data stored successfully")
+            else:
+                logger.warning(f"⚠️ Bus occupancy insert returned None (Supabase not configured)")
         except Exception as db_error:
-            logger.error(f"Database error: {db_error}")
+            logger.error(f"❌ Database error: {db_error}")
+            logger.exception(db_error)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to store occupancy data"
