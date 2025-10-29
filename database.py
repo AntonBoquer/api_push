@@ -125,6 +125,45 @@ class SupabaseClient:
         except Exception as e:
             logger.error(f"Error updating data in {table_name}: {e}")
             raise
+    
+    async def get_latest_by_json_field(self, table_name: str, json_field: str, json_value: str, limit: int = 1):
+        """
+        Get the latest record(s) from a table filtered by a field inside json_data column
+        Optimized to filter in the database instead of downloading all records
+        
+        Args:
+            table_name: Name of the table
+            json_field: Field name inside json_data to filter by (e.g., 'bus_id')
+            json_value: Value to match
+            limit: Number of records to return (default 1 for latest)
+        """
+        try:
+            # Ensure client is initialized
+            if not self._initialized:
+                self.connect()
+            
+            if not self.client:
+                logger.warning(f"Supabase client not available. Skipping get from {table_name}")
+                return None
+            
+            # Use PostgreSQL JSON operator to filter by field inside json_data
+            # The ->> operator extracts JSON field as text
+            query = (
+                self.client.table(table_name)
+                .select("*")
+                .eq(f"json_data->{json_field}", json_value)  # Filter by JSON field
+                .order("created_at", desc=True)  # Get most recent first
+                .limit(limit)
+            )
+            
+            # Run blocking Supabase operation in thread pool
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, query.execute)
+            logger.info(f"Query executed on {table_name} filtered by {json_field}={json_value}")
+            return result
+        except Exception as e:
+            logger.error(f"Error querying {table_name} with json filter: {e}")
+            raise
 
 # Global instance
 supabase_client = SupabaseClient()

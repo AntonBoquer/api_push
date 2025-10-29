@@ -160,6 +160,9 @@ async def push_data(
     background_tasks: BackgroundTasks,
     token: str = Depends(verify_bearer_token)
 ):
+    # Track server reception time to detect cold starts
+    T_server_received = time.time()
+    
     try:
         # Use existing UUID or generate a new one (minimal logging)
         record_uuid = payload.uuid or str(uuid.uuid4())
@@ -182,6 +185,8 @@ async def push_data(
 
         db_insert_start = time.time()
         try:
+            # Log timing to detect cold start vs database latency
+            logger.info(f"⏱️ TIMING: Server_Received_to_DB_Start = {db_insert_start - T_server_received:.3f}s")
             logger.info(f"🔵 Starting database insert for UUID {record_uuid}")
             result = await supabase_client.insert_data("push_requests", json_data)
             db_duration = time.time() - db_insert_start
@@ -294,33 +299,27 @@ async def get_bus_occupancy(
 ):
     """
     Get current bus occupancy data for a specific bus
+    OPTIMIZED: Filters in the database instead of downloading all records
     """
     try:
         logger.info(f"Retrieving occupancy data for bus {bus_id}")
         
-        # Get latest data for the bus from simplified schema
-        result = await supabase_client.get_data("bus_occupancy")
+        # OPTIMIZED QUERY: Filter by bus_id in database, order by time, get the latest one
+        # This is much faster than downloading all records and filtering in Python
+        result = await supabase_client.get_latest_by_json_field(
+            table_name="bus_occupancy",
+            json_field="bus_id",
+            json_value=bus_id,
+            limit=1
+        )
         
-        if not result.data:
+        if not result or not result.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No occupancy data found for bus {bus_id}"
             )
         
-        # Filter and get the most recent entry for the specific bus
-        bus_data = [
-            entry for entry in result.data 
-            if entry.get('json_data', {}).get('bus_id') == bus_id
-        ]
-        
-        if not bus_data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No occupancy data found for bus {bus_id}"
-            )
-        
-        # Get the most recent entry based on created_at
-        latest_data = max(bus_data, key=lambda x: x.get('created_at', ''))
+        latest_data = result.data[0]
         
         return APIResponse(
             success=True,
